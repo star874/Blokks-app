@@ -1,0 +1,438 @@
+import React, { useCallback, useState } from 'react';
+import { Handle, Position } from 'reactflow';
+import { useDropzone } from 'react-dropzone';
+
+function CustomNode({ data, id }) {
+  const [speaking, setSpeaking] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const getNodeColor = (type) => {
+    const colorMap = {
+      'input': '#10b981',
+      'text-input': '#10b981',
+      'image-input': '#8b5cf6',
+      'variable': '#06b6d4',
+      'process': '#6366f1',
+      'ai-process': '#6366f1',
+      'ai-vision': '#ec4899',
+      'prompt-template': '#3b82f6',
+      'conditional': '#f59e0b',
+      'combiner': '#06b6d4',
+      'delay': '#84cc16',
+      'text-transform': '#a855f7',
+      'json-parser': '#f97316',
+      'text-to-speech': '#14b8a6',
+      'file-export': '#10b981',
+      'output': '#14b8a6',
+      'text-output': '#14b8a6',
+    };
+    return colorMap[type] || '#6366f1';
+  };
+
+  const getIcon = (type) => {
+    const iconMap = {
+      'input': '📝',
+      'text-input': '📝',
+      'image-input': '🖼️',
+      'variable': '🔢',
+      'process': '🤖',
+      'ai-process': '🤖',
+      'ai-vision': '👁️',
+      'prompt-template': '📋',
+      'conditional': '🔀',
+      'combiner': '🔗',
+      'delay': '⏱️',
+      'text-transform': '✨',
+      'json-parser': '📊',
+      'text-to-speech': '🔊',
+      'file-export': '💾'
+      'output': '📄',
+      'text-output': '📄',
+    };
+    return iconMap[type] || '⚙️';
+  };
+  const isDelay = data.type === 'delay';
+  const isVariable = data.type === 'variable';
+  const isFileExport = data.type === 'file-export';
+  const isTTS = data.type === 'text-to-speech';
+  const color = getNodeColor(data.type);
+  const icon = getIcon(data.type);
+  const isTextInput = data.type === 'input' || data.type === 'text-input';
+  const isImageInput = data.type === 'image-input';
+  const isConditional = data.type === 'conditional';
+  const isPromptTemplate = data.type === 'prompt-template';
+  const isTextTransform = data.type === 'text-transform';
+  const isJSONParser = data.type === 'json-parser';
+  const isDelay = data.type === 'delay';
+  const isTTS = data.type === 'text-to-speech';
+  const hasOutput = data.output !== null && data.output !== undefined;
+
+  const onDrop = useCallback((acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        data.imageData = reader.result;
+        data.value = file.name;
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [data]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+    },
+    maxFiles: 1,
+    disabled: data.isProcessing
+  });
+
+  const handleSpeak = () => {
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      setIsPlaying(false);
+    } else if (data.output) {
+      const utterance = new SpeechSynthesisUtterance(data.output);
+      utterance.onend = () => {
+        setSpeaking(false);
+        setIsPlaying(false);
+      };
+      window.speechSynthesis.speak(utterance);
+      setSpeaking(true);
+      setIsPlaying(true);
+    }
+  };
+
+  return (
+    <div 
+      className={`custom-node ${data.isProcessing ? 'processing' : ''} ${data.error ? 'error' : ''}`}
+      style={{ borderColor: color }}
+    >
+      {!isTextInput && !isImageInput && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="node-handle"
+          style={{ background: color }}
+        />
+      )}
+      
+      <div className="node-header">
+        <div className="node-icon" style={{ color: color }}>
+          {data.isProcessing ? '⏳' : icon}
+        </div>
+        <div className="node-label">{data.label}</div>
+      </div>
+
+      <div className="node-body">
+        {isTextInput && (
+          <textarea
+            className="node-input"
+            value={data.value || ''}
+            onChange={(e) => {
+              data.value = e.target.value;
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="Enter text here..."
+            rows={3}
+          />
+        )}
+
+        {isImageInput && (
+          <div {...getRootProps()} className={`image-dropzone ${isDragActive ? 'active' : ''}`}>
+            <input {...getInputProps()} />
+            {data.imageData ? (
+              <div className="image-preview">
+                <img src={data.imageData} alt="Uploaded" />
+                <p className="image-name">{data.value}</p>
+              </div>
+            ) : (
+              <div className="dropzone-placeholder">
+                <span className="dropzone-icon">📁</span>
+                <p>{isDragActive ? 'Drop image here' : 'Drag image or click to upload'}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isPromptTemplate && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Template (use {'{input}'} for placeholder):</label>
+            <textarea
+              className="node-input"
+              value={data.template || 'Analyze this text: {input}'}
+              onChange={(e) => {
+                data.template = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+              placeholder="Enter your prompt template..."
+              rows={4}
+            />
+          </div>
+        )}
+
+        {isTextTransform && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Transform Type:</label>
+            <select 
+              className="condition-select"
+              value={data.transformType || 'uppercase'}
+              onChange={(e) => {
+                data.transformType = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <option value="uppercase">UPPERCASE</option>
+              <option value="lowercase">lowercase</option>
+              <option value="capitalize">Capitalize First Letter</option>
+              <option value="reverse">Reverse Text</option>
+              <option value="trim">Remove Whitespace</option>
+              <option value="replace">Find & Replace</option>
+            </select>
+
+            {data.transformType === 'replace' && (
+              <>
+                <input
+                  type="text"
+                  className="condition-input"
+                  placeholder="Find text..."
+                  value={data.findText || ''}
+                  onChange={(e) => {
+                    data.findText = e.target.value;
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+                <input
+                  type="text"
+                  className="condition-input"
+                  placeholder="Replace with..."
+                  value={data.replaceText || ''}
+                  onChange={(e) => {
+                    data.replaceText = e.target.value;
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </>
+            )}
+          </div>
+        )}
+
+        {isJSONParser && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>JSON Path (e.g., data.name or items[0].value):</label>
+            <input
+              type="text"
+              className="condition-input"
+              placeholder="data.fieldName"
+              value={data.jsonPath || ''}
+              onChange={(e) => {
+                data.jsonPath = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+
+        {isDelay && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Delay (seconds):</label>
+            <input
+              type="number"
+              className="condition-input"
+              placeholder="1"
+              min="0"
+              max="60"
+              value={data.delaySeconds || '1'}
+              onChange={(e) => {
+                data.delaySeconds = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+        {/* Variable Block */}
+        {isVariable && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Action:</label>
+            <select 
+              className="condition-select"
+              value={data.variableAction || 'get'}
+              onChange={(e) => {
+                data.variableAction = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <option value="get">Get Variable</option>
+              <option value="set">Set Variable</option>
+            </select>
+
+            <label>Variable Name:</label>
+            <input
+              type="text"
+              className="condition-input"
+              placeholder="myVariable"
+              value={data.variableName || ''}
+              onChange={(e) => {
+                data.variableName = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+
+        {/* File Export Block */}
+        {isFileExport && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Filename:</label>
+            <input
+              type="text"
+              className="condition-input"
+              placeholder="output.txt"
+              value={data.filename || 'output.txt'}
+              onChange={(e) => {
+                data.filename = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+        {isConditional && !data.isProcessing && !hasOutput && (
+          <div className="block-settings">
+            <label>Condition Type:</label>
+            <select 
+              className="condition-select"
+              value={data.conditionType || 'contains'}
+              onChange={(e) => {
+                data.conditionType = e.target.value;
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <option value="contains">Contains text</option>
+              <option value="not-contains">Does not contain</option>
+              <option value="length">Text length</option>
+              <option value="sentiment">Sentiment (AI)</option>
+            </select>
+
+            {(data.conditionType === 'contains' || data.conditionType === 'not-contains') && (
+              <input
+                type="text"
+                className="condition-input"
+                placeholder="Text to check..."
+                value={data.conditionValue || ''}
+                onChange={(e) => {
+                  data.conditionValue = e.target.value;
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+            )}
+
+            {data.conditionType === 'length' && (
+              <div className="condition-length">
+                <select
+                  className="condition-operator"
+                  value={data.conditionOperator || 'greater'}
+                  onChange={(e) => {
+                    data.conditionOperator = e.target.value;
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <option value="greater">Greater than</option>
+                  <option value="less">Less than</option>
+                </select>
+                <input
+                  type="number"
+                  className="condition-input"
+                  placeholder="Length"
+                  value={data.conditionValue || ''}
+                  onChange={(e) => {
+                    data.conditionValue = e.target.value;
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {data.isProcessing && (
+          <div className="processing-indicator">
+            <div className="spinner"></div>
+            <span>Processing...</span>
+          </div>
+        )}
+
+        {data.error && (
+          <div className="error-message">
+            ❌ {data.error}
+          </div>
+        )}
+
+        {hasOutput && !data.isProcessing && (
+          <div className="node-output">
+            {isConditional ? (
+              <>
+                <strong>Result:</strong>
+                <div className="output-content conditional-result">
+                  {data.output === true ? '✅ TRUE - Routing to TRUE path' : '❌ FALSE - Routing to FALSE path'}
+                </div>
+              </>
+            ) : isTTS ? (
+              <>
+                <strong>Audio Ready:</strong>
+                <button 
+                  className="tts-button"
+                  onClick={handleSpeak}
+                >
+                  {speaking ? '⏸️ Stop' : '▶️ Play Audio'}
+                </button>
+                <div className="output-content">{data.output}</div>
+              </>
+            ) : (
+              <>
+                <strong>Output:</strong>
+                <div className="output-content">{data.output}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {isConditional ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="true"
+            className="node-handle handle-true"
+            style={{ background: '#10b981', left: '30%' }}
+          />
+          <div className="handle-label handle-label-true">TRUE</div>
+          
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="false"
+            className="node-handle handle-false"
+            style={{ background: '#ef4444', left: '70%' }}
+          />
+          <div className="handle-label handle-label-false">FALSE</div>
+        </>
+      ) : (
+        (isTextInput || isImageInput || data.type === 'process' || data.type === 'ai-process' || 
+         data.type === 'ai-vision' || isPromptTemplate || data.type === 'combiner' || 
+         isDelay || isTextTransform || isJSONParser || isTTS) && (
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            className="node-handle"
+            style={{ background: color }}
+          />
+        )
+      )}
+    </div>
+  );
+}
+
+export default CustomNode;
